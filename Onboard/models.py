@@ -25,7 +25,8 @@ class CustomField(models.Model):
     name = models.CharField(max_length=255)
     field_key = models.CharField(max_length=255)
     data_type = models.CharField(max_length=100)
-    model = models.CharField(max_length=50)       
+    model = models.CharField(max_length=50)   
+    is_checked = models.BooleanField(default=False)    
 
     def __str__(self):
         return f"{self.name} ({self.field_key})"
