@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Custom Fields</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f8f9fa;
+        }
+        h2 {
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        p {
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    {% if custom_fields %}
+        <h2>Custom Fields for Location: {{ custom_fields.first.location.location_id }}</h2>
+
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Field Key</th>
+                <th>Data Type</th>
+                <th>Model</th>
+                <th>Field ID</th>
+            </tr>
+            {% for field in custom_fields %}
+            <tr>
+                <td>{{ field.name }}</td>
+                <td>{{ field.field_key }}</td>
+                <td>{{ field.data_type }}</td>
+                <td>{{ field.model }}</td>
+                <td>{{ field.field_id }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    {% else %}
+        <h2>No Custom Fields Found</h2>
+        <p>There are no custom fields stored for this location.</p>
+    {% endif %}
+</body>
+</html>

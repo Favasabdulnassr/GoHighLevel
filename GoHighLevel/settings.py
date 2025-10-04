@@ -106,6 +106,11 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+CLIENT_ID = config('CLIENT_ID')
+CLIENT_SECRET = config('CLIENT_SECRET')
+REDIRECT_URI = config('REDIRECT_URI')
+
+
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
