@@ -4,8 +4,10 @@ from datetime import timedelta
 from django.conf import settings
 from django.http import JsonResponse
 import requests
+from django.contrib import messages
 from .models import IntegrationToken,CustomField
 from .utils import get_valid_access_token
+from django.views.decorators.http import require_GET
 
 
 
@@ -22,6 +24,7 @@ def authorize(request):
     scope = (
         "contacts.readonly%20"
         "contacts.write%20"
+        "locations.readonly%20"
         "locations/customFields.readonly%20"
         "locations/customValues.write%20"
         "locations/customFields.write"
@@ -70,6 +73,7 @@ def submit_location(request):
         refresh_token = tokens["refresh_token"]
         expires_in = tokens.get("expires_in", 3600)
         expires_at = timezone.now() + timedelta(seconds=expires_in)
+
 
         integration, created = IntegrationToken.objects.update_or_create(
             location_id=location_id,
@@ -138,4 +142,87 @@ def list_custom_fields(request, location_id):
 
 
 
+
+
+def toggle_custom_fields(request, location_id):
+    if request.method == "POST":
+        field_ids = request.POST.getlist("field_ids")
+        action = request.POST.get("action")
+
+        if not field_ids:
+            messages.warning(request, "Please select at least one custom field.")
+            return redirect("list_custom_fields", location_id=location_id)
+
+        is_checked = True if action == "check" else False
+
+        CustomField.objects.filter(id__in=field_ids).update(is_checked=is_checked)
+        messages.success(request, f"{'Checked' if is_checked else 'Unchecked'} {len(field_ids)} custom field(s).")
+
+    return redirect("list_custom_fields", location_id=location_id)
+
+
+
+
+
+
+@require_GET
+def get_checked_contact_fields(request, location_id):
+    contact_id = request.GET.get("contact_id")  # get from form input
+
+
+
+    if not contact_id:
+        return render(request, "custom_fields.html", {
+            "custom_fields": IntegrationToken.objects.get(location_id=location_id).custom_fields.all(),
+            "contact_error": "Please provide a contact ID."
+        })
+    
+    access_token = get_valid_access_token(location_id)
+    if not access_token:
+        return JsonResponse({"error": "Failed to get access token"}, status=400)
+
+    try:
+        integration = IntegrationToken.objects.get(location_id=location_id)
+    except IntegrationToken.DoesNotExist:
+        return JsonResponse({"error": "Integration not found"}, status=404)
+    
+
+    
+    
+    checked_fields = CustomField.objects.filter(location=integration, is_checked=True)
+
+    if not checked_fields.exists():
+        return JsonResponse({"message": "No checked custom fields"}, status=200)
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Version": "2021-07-28",
+    }
+    url = f"https://services.leadconnectorhq.com/contacts/{contact_id}?locationId={location_id}"
+    resp = requests.get(url, headers=headers)
+
+    if resp.status_code != 200:
+        return JsonResponse({"error": "Failed to fetch contact"}, status=resp.status_code)
+
+    contact_data = resp.json()
+
+    checked_data = []
+    contact_custom_fields = contact_data.get("contact", {}).get("customFields", [])
+
+
+
+    for field in checked_fields:
+        value = next((cf.get("value") for cf in contact_custom_fields if cf.get("id") == field.field_id), None)
+        if value is not None:
+            checked_data.append({
+                "name": field.name,
+                "key": field.field_key,
+                "value": value
+            })
+    custom_fields = CustomField.objects.filter(location=integration, is_checked=True)
+
+    return render(request, "custom_fields.html", {
+        "custom_fields": custom_fields,
+        "checked_fields": checked_data
+    })
 
