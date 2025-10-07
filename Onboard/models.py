@@ -9,6 +9,11 @@ class IntegrationToken(models.Model):
     access_token = models.TextField()
     refresh_token = models.TextField()
     expires_at = models.DateTimeField()
+    name = models.CharField(max_length=255,blank=True,null=True)
+    phone = models.CharField(max_length=50,blank=True,null=True)
+    address = models.TextField(blank=True,null=True)
+    website = models.CharField(max_length=255,blank=True,null=True)
+
 
     def is_expired(self):
         return timezone.now() >= self.expires_at

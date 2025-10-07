@@ -63,68 +63,79 @@
 </head>
 <body>
     {% if custom_fields %}
-        <h2>Custom Fields for Location: {{ custom_fields.first.location.location_id }}</h2>
+        <h2>Custom Fields for Location: {{ custom_fields.first.location.name }}</h2>
 
         <!-- Existing form for check/uncheck -->
         <form method="POST" action="{% url 'toggle_custom_fields' custom_fields.first.location.location_id  %}">
             {% csrf_token %}
-            <table>
-                <tr>
-                    <th>Select</th>
-                    <th>Name</th>
-                    <th>Field Key</th>
-                    <th>Data Type</th>
-                    <th>Model</th>
-                    <th>Field ID</th>
-                    <th>Checked</th>
-                </tr>
-                {% for field in custom_fields %}
-                <tr>
-                    <td>
-                        <input type="checkbox" name="field_ids" value="{{ field.id }}">
-                    </td>
-                    <td>{{ field.name }}</td>
-                    <td>{{ field.field_key }}</td>
-                    <td>{{ field.data_type }}</td>
-                    <td>{{ field.model }}</td>
-                    <td>{{ field.field_id }}</td>
-                    <td>
-                        {% if field.is_checked %}
-                            ✅
-                        {% else %}
-                            ❌
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </table>
+    <table>
+    <tr>
+        <th>Name</th>
+        <th>Field Key</th>
+        <th>Data Type</th>
+        <th>Model</th>
+        <th>Field ID</th>
+        <th>Active</th>
 
-            <button type="submit" name="action" value="check">Check Selected</button>
-            <button type="submit" name="action" value="uncheck" class="uncheck-btn">Uncheck Selected</button>
+    </tr>
+    {% for field in custom_fields %}
+    <tr>
+        
+        <td>{{ field.name }}</td>
+        <td>{{ field.field_key }}</td>
+        <td>{{ field.data_type }}</td>
+        <td>{{ field.model }}</td>
+        <td>{{ field.field_id }}</td>
+        <td>
+            <input type="checkbox" class="toggle-checkbox" data-field-id="{{ field.id }}" {% if field.is_checked %}checked{% endif %}>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+
+
+           
         </form>
 
-        <!-- New form for fetching checked fields for a contact -->
-        <h3>Retrieve Checked Custom Fields for Contact</h3>
-        <form method="GET" action="{% url 'get_checked_contact_fields' custom_fields.first.location.location_id %}">
-            <input type="text" name="contact_id" placeholder="Enter Contact ID" required>
-            <button type="submit">Fetch Checked Fields</button>
-        </form>
-
-        <div id="checked-fields-result">
-            {% if checked_fields %}
-                <ul>
-                    {% for field in checked_fields %}
-                        <li><b>Name:</b> {{ field.name }}, <b>Key:</b> {{ field.key }}, <b>Value:</b> {{ field.value }}</li>
-                    {% endfor %}
-                </ul>
-            {% elif contact_error %}
-                <p style="color:red;">{{ contact_error }}</p>
-            {% endif %}
-        </div>
+       
 
     {% else %}
         <h2>No Custom Fields Found</h2>
         <p>There are no custom fields stored for this location.</p>
     {% endif %}
+
+
+    <script>
+document.querySelectorAll('.toggle-checkbox').forEach(function(checkbox) {
+    checkbox.addEventListener('change', function() {
+        const fieldId = this.dataset.fieldId;
+        const isChecked = this.checked;
+        const action = isChecked ? 'check' : 'uncheck';
+        
+        const locationId = "{{ custom_fields.first.location.location_id }}";
+
+        const formData = new FormData();
+        formData.append('field_ids', fieldId);
+        formData.append('action', action);
+
+        fetch(`/custom-fields/${locationId}/toggle/`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                alert("Failed to update field!");
+                checkbox.checked = !isChecked; // revert checkbox if failed
+            }
+        });
+    });
+});
+</script>
+
+
 </body>
 </html>

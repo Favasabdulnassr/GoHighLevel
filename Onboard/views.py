@@ -17,7 +17,9 @@ REDIRECT_URI = settings.REDIRECT_URI
 
 
 def Login(request):
-    return render(request,"loginButton.html")
+    
+    locations = IntegrationToken.objects.all().order_by("name")
+    return render(request,"onBoard.html",{"locations":locations})
 
 
 def authorize(request):
@@ -61,9 +63,7 @@ def submit_location(request):
         }
 
         token_response = requests.post(token_url, data=data)
-        print("Token response status code:", token_response.status_code)
         tokens = token_response.json()
-        print("Token response JSON:", tokens)
 
         if "access_token" not in tokens:
             print("Access token missing in response!")
@@ -74,13 +74,30 @@ def submit_location(request):
         expires_in = tokens.get("expires_in", 3600)
         expires_at = timezone.now() + timedelta(seconds=expires_in)
 
+         # Fetch location details using the access token
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Version": "2021-07-28"
+        }
+        location_url = f"https://services.leadconnectorhq.com/locations/{location_id}"
 
+        loc_resp = requests.get(location_url, headers=headers)
+        print('aaaaaaaaaaaaaaaaaaaaaaaaaa',loc_resp.json())
+        if loc_resp.status_code != 200:
+            return render(request, "form.html", {"error": "Failed to fetch location details"})
+        
+        loc_data = loc_resp.json().get("location", {})
+        
         integration, created = IntegrationToken.objects.update_or_create(
             location_id=location_id,
             defaults={
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "expires_at": expires_at,
+                "name": loc_data.get("name"),
+                "phone": loc_data.get("phone"),
+                "address": loc_data.get("address"),
+                "website": loc_data.get("website"),
             },
         )
         print("Token saved to DB. Created new:", created)
@@ -107,7 +124,7 @@ def fetch_custom_fields(request, location_id):
         return render(request, "form.html", {"error": "Failed to fetch custom fields"})
 
     data = response.json()
-    print(data)
+    print('ccccccccccccccccccccccccccccccccccccccccccccccccc',data)
 
     if "customFields" not in data:
         return render(request, "form.html", {"error": "No custom fields found"})
