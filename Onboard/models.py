@@ -39,14 +39,3 @@ class CustomField(models.Model):
     
 
 
-
-class Pdf(models.Model):
-    location = models.ForeignKey(IntegrationToken, on_delete=models.CASCADE)
-    opportunity_id = models.CharField(max_length=255)
-    data = models.JSONField()  
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"PDF Data for Opportunity {self.opportunity_id}"
-
-

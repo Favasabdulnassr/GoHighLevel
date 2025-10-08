@@ -9,7 +9,7 @@ urlpatterns = [
     path("fetch-custom-fields/<str:location_id>/", views.fetch_custom_fields, name="fetch_custom_fields"),
     path("list-custom-fields/<str:location_id>/", views.list_custom_fields, name="list_custom_fields"),
     path("custom-fields/<str:location_id>/toggle/", views.toggle_custom_fields, name="toggle_custom_fields"),
-    path('locations/<str:location_id>/opportunities/<str:opportunity_id>/pdf/', views.CustomValue_pdf_view, name="opportunity_pdf_view"),
+    path('locations/<str:location_id>/opportunities/<str:opportunity_id>/pdf/', views.CustomField_PdF_Upload, name="opportunity_pdf_view"),
 
 
     ]

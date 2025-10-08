@@ -6,15 +6,21 @@ from django.http import JsonResponse
 import requests
 from django.contrib import messages
 import uuid
-import os
+import json
 import requests
-from .models import IntegrationToken, CustomField, Pdf
+from .models import IntegrationToken, CustomField
 from django.template.loader import render_to_string
 from .utils import get_valid_access_token
-from .models import IntegrationToken,CustomField,Pdf
+from .models import IntegrationToken,CustomField
 from .utils import get_valid_access_token
 from django.views.decorators.http import require_GET
 from xhtml2pdf import pisa
+from PIL import Image
+import base64
+from io import BytesIO
+import os
+
+
 
 
 
@@ -35,6 +41,7 @@ def authorize(request):
         "contacts.readonly%20"
         "contacts.write%20"
         "opportunities.readonly%20"
+        "medias.write%20"
         "locations.readonly%20"
         "locations/customFields.readonly%20"
         "locations/customValues.readonly%20"
@@ -189,12 +196,8 @@ def toggle_custom_fields(request, location_id):
         messages.success(request, f"{'Checked' if is_checked else 'Unchecked'} {len(field_ids)} custom field(s).")
 
     return redirect("list_custom_fields", location_id=location_id)
-
-def CustomValue_pdf_view(request, location_id, opportunity_id):
-    from PIL import Image
-    import base64
-    from io import BytesIO
-
+def CustomField_PdF_Upload(request, location_id, opportunity_id):
+    
     access_token = get_valid_access_token(location_id)
     if not access_token:
         return JsonResponse({"error": "Failed to get access token"}, status=400)
@@ -208,24 +211,32 @@ def CustomValue_pdf_view(request, location_id, opportunity_id):
 
     opp_url = f"https://services.leadconnectorhq.com/opportunities/{opportunity_id}"
     resp = requests.get(opp_url, headers=headers)
+    try:
+        opp_json = resp.json()
+    except Exception as e:
+        opp_json = {}
     if resp.status_code != 200:
         return JsonResponse({"error": "Failed to fetch opportunity"}, status=resp.status_code)
 
-    opp_data = resp.json().get("opportunity", {})
+    opp_data = opp_json.get("opportunity", {})
     opp_custom_fields = opp_data.get("customFields", [])
-
-    contact_custom_fields = []
     contact_id = opp_data.get("contactId")
+
+    # Fetch contact custom fields
+    contact_custom_fields = []
     if contact_id:
         contact_url = f"https://services.leadconnectorhq.com/contacts/{contact_id}?locationId={location_id}"
         contact_resp = requests.get(contact_url, headers=headers)
+        try:
+            contact_json = contact_resp.json()
+        except Exception as e:
+            contact_json = {}
         if contact_resp.status_code == 200:
-            contact_data = contact_resp.json().get("contact", {})
+            contact_data = contact_json.get("contact", {})
             contact_custom_fields = contact_data.get("customFields", [])
 
     checked_fields = CustomField.objects.filter(location=integration, is_checked=True)
-
-    pdf_data = [["Name", "Value"]]  
+    pdf_data = [["Name", "Value"]]
     for field in checked_fields:
         value = ""
         if field.model == "opportunity":
@@ -234,19 +245,10 @@ def CustomValue_pdf_view(request, location_id, opportunity_id):
             value = next((f.get("value", "") for f in contact_custom_fields if f.get("id") == field.field_id), "")
         pdf_data.append([field.name, value])
 
-    Pdf.objects.update_or_create(
-        location=integration,
-        opportunity_id=opportunity_id,
-        defaults={"data": pdf_data}
-    )
-
-    # Process logo to base64 with improved sizing and quality
     logo_base64 = None
     if integration.logo:
         try:
             img = Image.open(integration.logo.path)
-            
-            # Convert to RGB if necessary (handles PNG transparency)
             if img.mode in ('RGBA', 'LA', 'P'):
                 background = Image.new('RGB', img.size, (255, 255, 255))
                 if img.mode == 'P':
@@ -256,38 +258,24 @@ def CustomValue_pdf_view(request, location_id, opportunity_id):
                 else:
                     background.paste(img)
                 img = background
-            
-            # Resize to max 160x60 while maintaining aspect ratio
-            # This ensures better visibility in the PDF
-            max_width = 160
-            max_height = 60
-            
-            # Calculate aspect ratio
+            max_width, max_height = 160, 60
             img_ratio = img.width / img.height
             target_ratio = max_width / max_height
-            
             if img_ratio > target_ratio:
-                # Image is wider than target
                 new_width = max_width
                 new_height = int(max_width / img_ratio)
             else:
-                # Image is taller than target
                 new_height = max_height
                 new_width = int(max_height * img_ratio)
-            
             img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Convert to base64 with higher quality
             buffer = BytesIO()
             img.save(buffer, format='PNG', optimize=True)
             img_str = base64.b64encode(buffer.getvalue()).decode()
             logo_base64 = f"data:image/png;base64,{img_str}"
-            
+            print("Logo processed successfully")
         except Exception as e:
             print(f"Error processing logo: {e}")
-            logo_base64 = None
 
-    # Render HTML template
     html_string = render_to_string(
         "pdf_customValue.html",
         {
@@ -298,21 +286,195 @@ def CustomValue_pdf_view(request, location_id, opportunity_id):
         }
     )
 
-    # Ensure PDF directory exists
     pdf_dir = os.path.join(settings.MEDIA_ROOT, "pdfs")
     os.makedirs(pdf_dir, exist_ok=True)
-    pdf_filename = f"{uuid.uuid4()}.pdf"
+    pdf_filename = f"custom_fields_{opportunity_id}.pdf"  # More descriptive filename
     full_path = os.path.join(pdf_dir, pdf_filename)
 
-    # Generate PDF
     with open(full_path, "wb") as pdf_file:
         pisa_status = pisa.CreatePDF(src=html_string, dest=pdf_file)
         if pisa_status.err:
+            print("Error generating PDF:", pisa_status.err)
             return JsonResponse({"error": "Failed to generate PDF"}, status=500)
 
-    pdf_url = request.build_absolute_uri(f"{settings.MEDIA_URL}pdfs/{pdf_filename}")
+    upload_url = "https://services.leadconnectorhq.com/medias/upload-file"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Version": "2021-07-28",
+    }
+
+    with open(full_path, "rb") as f:
+        files = {
+            "file": (pdf_filename, f, "application/pdf")
+        }
+        data = {
+            "hosted": "false",
+            "name": pdf_filename,
+        }
+        upload_resp = requests.post(upload_url, headers=headers, files=files, data=data)
+
+    try:
+        upload_json = upload_resp.json()
+    except Exception as e:
+        upload_json = {}
+    if upload_resp.status_code != 201:
+        return JsonResponse({"error": "Failed to upload PDF"}, status=upload_resp.status_code)
+
+    file_url = upload_json.get("url")
+    file_id = upload_json.get("fileId")
+    if not file_url:
+        return JsonResponse({"error": "No file URL returned"}, status=500)
+
+    if contact_id:
+        update_contact_url = f"https://services.leadconnectorhq.com/contacts/{contact_id}"
+        
+        # First, get ALL custom fields for the location to find FILE_UPLOAD fields
+        location_fields_url = f"https://services.leadconnectorhq.com/locations/{location_id}/custom-fields"
+        fields_resp = requests.get(location_fields_url, headers=headers)
+        
+        pdf_field_id = None
+        pdf_field_key = None
+        fields_data = {}  # Initialize fields_data
+        
+        if fields_resp.status_code == 200:
+            fields_data = fields_resp.json()
+            print(f"Found {len(fields_data.get('customFields', []))} custom fields for location")
+            
+            # Look for existing FILE_UPLOAD field
+            for field in fields_data.get("customFields", []):
+                print(f"Field: {field.get('name')} - Type: {field.get('dataType')} - ID: {field.get('id')}")
+                
+                # First, try to find a field specifically for PDFs
+                if field.get("dataType") == "FILE_UPLOAD" and "pdf" in field.get("name", "").lower():
+                    pdf_field_id = field.get("id")
+                    pdf_field_key = field.get("key")
+                    print(f"Found PDF file upload field: {field.get('name')} with ID: {pdf_field_id}")
+                    break
+                # If no PDF-specific field, use any FILE_UPLOAD field
+                elif field.get("dataType") == "FILE_UPLOAD" and not pdf_field_id:
+                    pdf_field_id = field.get("id")
+                    pdf_field_key = field.get("key")
+                    print(f"Found generic file upload field: {field.get('name')} with ID: {pdf_field_id}")
+        else:
+            print(f"Failed to fetch location custom fields. Status: {fields_resp.status_code}")
+            print(f"Response: {fields_resp.text}")
+        
+        # Also check if the contact already has a file field with a value
+        if not pdf_field_id and contact_custom_fields:
+            for field in contact_custom_fields:
+                field_id = field.get("id")
+                field_value = field.get("value")
+                # Check if this field contains file data (has documentId structure)
+                if isinstance(field_value, dict) and any(
+                    isinstance(v, dict) and "documentId" in v 
+                    for v in field_value.values()
+                ):
+                    pdf_field_id = field_id
+                    print(f"Found existing file field in contact: {pdf_field_id}")
+                    
+                    # Get the key for this field from location fields if we have them
+                    for loc_field in fields_data.get("customFields", []):
+                        if loc_field.get("id") == field_id:
+                            pdf_field_key = loc_field.get("key")
+                            break
+                    break
+        
+        if not pdf_field_id:
+            print("ERROR: No FILE_UPLOAD custom field found!")
+            print("Please create a FILE_UPLOAD custom field in your CRM first")
+            return JsonResponse({
+                "error": "No FILE_UPLOAD custom field found. Please create one in your CRM settings.",
+                "message": "PDF was uploaded but not attached to contact"
+            }, status=400)
+
+        # Generate a unique UUID for the file
+        file_uuid = str(uuid.uuid4())
+        
+        # Properly structure the field_value object
+        field_value = {
+            file_uuid: {
+                "meta": {
+                    "fieldname": pdf_field_key or pdf_field_id,  # Use key if available, otherwise ID
+                    "originalname": pdf_filename,
+                    "encoding": "7bit",
+                    "mimetype": "application/pdf",
+                    "uuid": file_uuid,
+                    "size": os.path.getsize(full_path) if os.path.exists(full_path) else 0
+                },
+                "url": file_url,
+                "documentId": file_id
+            }
+        }
+        
+        # Build the payload
+        custom_field_entry = {
+            "id": pdf_field_id,
+            "field_value": field_value
+        }
+        
+        # Only add key if we have it
+        if pdf_field_key:
+            custom_field_entry["key"] = pdf_field_key
+        
+        contact_payload = {
+            "customFields": [custom_field_entry]
+        }
+        
+        # Debug logging
+        print(f"Updating contact {contact_id} with field ID: {pdf_field_id}")
+        print(f"Payload: {json.dumps(contact_payload, indent=2)}")
+        
+        # Make the API call
+        contact_resp = requests.put(
+            update_contact_url, 
+            headers={**headers, "Content-Type": "application/json"}, 
+            json=contact_payload
+        )
+        
+        # Debug response
+        print(f"Contact update response status: {contact_resp.status_code}")
+        
+        try:
+            contact_json = contact_resp.json()
+            
+            # Check if the file was actually added to custom fields
+            updated_contact = contact_json.get("contact", {})
+            updated_custom_fields = updated_contact.get("customFields", [])
+            
+            file_added = False
+            for field in updated_custom_fields:
+                if field.get("id") == pdf_field_id:
+                    field_value = field.get("value", {})
+                    if isinstance(field_value, dict) and file_id in str(field_value):
+                        file_added = True
+                        print(f"SUCCESS: File added to custom field {pdf_field_id}")
+                        break
+            
+            if not file_added:
+                print("WARNING: File may not have been added to custom fields")
+                print(f"Updated custom fields: {json.dumps(updated_custom_fields, indent=2)}")
+                
+        except Exception as e:
+            contact_json = {}
+            print(f"Failed to parse contact update response: {e}")
+            
+        if contact_resp.status_code != 200:
+            return JsonResponse({
+                "error": "Failed to update contact", 
+                "details": contact_resp.text,
+                "status_code": contact_resp.status_code
+            }, status=contact_resp.status_code)
+
+    # Clean up the local PDF file after successful upload
+    try:
+        os.remove(full_path)
+    except Exception as e:
+        print(f"Failed to remove temporary PDF file: {e}")
 
     return JsonResponse({
-        "message": "PDF generated successfully",
-        "pdf_url": pdf_url
+        "message": "PDF generated, uploaded, and contact updated successfully",
+        "pdf_url": file_url,
+        "file_id": file_id,
+        "contact_id": contact_id,
+        "field_id": pdf_field_id
     })
