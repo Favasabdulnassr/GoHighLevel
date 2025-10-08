@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{{ integration.name }} - Active Custom Fields</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            color: #333;
+            margin: 20px;
+        }
+
+        /* Header table */
+        .header-table {
+            width: 100%;
+            margin-bottom: 20px;
+            border: none;
+        }
+
+        .header-table td {
+            vertical-align: middle;
+            border: none;
+        }
+
+        .header-table img {
+            max-height: 50px;
+            max-width: 120px;
+            display: block;
+        }
+
+        .header-title {
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        /* Table styling */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .data-table th, .data-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            word-wrap: break-word;
+        }
+
+        .data-table th {
+            background-color: #4a90e2;
+            color: white;
+            font-weight: bold;
+        }
+
+        .data-table tr:nth-child(even) td {
+            background-color: #f9f9f9;
+        }
+
+        .generated-at {
+            margin-top: 20px;
+            font-size: 10px;
+            color: #666;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header as table -->
+    <table class="header-table">
+        <tr>
+            <td style="width: 25%; text-align:left;">
+                {% if logo_base64 %}
+                <img src="{{ logo_base64 }}" alt="Logo">
+                {% endif %}
+            </td>
+            <td style="width: 75%;" class="header-title">
+                {{ integration.name|default:"Location" }}
+            </td>
+        </tr>
+    </table>
+
+    <!-- Active Custom Fields Table -->
+    <div class="section-title">Active Custom Fields</div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width:40%;">Field Name</th>
+                <th style="width:60%;">Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in pdf_data %}
+            <tr>
+                <td>{{ row.0 }}</td>
+                <td>{{ row.1|default:"-" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="2" style="text-align:center; color:#999;">No active fields found</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="generated-at">
+        Generated at: {{ generated_at|date:"d M Y H:i" }}
+    </div>
+</body>
+</html>

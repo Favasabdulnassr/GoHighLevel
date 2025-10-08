@@ -13,6 +13,7 @@ class IntegrationToken(models.Model):
     phone = models.CharField(max_length=50,blank=True,null=True)
     address = models.TextField(blank=True,null=True)
     website = models.CharField(max_length=255,blank=True,null=True)
+    logo = models.ImageField(upload_to="logos/",blank=True,null=True)
 
 
     def is_expired(self):
@@ -35,5 +36,17 @@ class CustomField(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.field_key})"
+    
+
+
+
+class Pdf(models.Model):
+    location = models.ForeignKey(IntegrationToken, on_delete=models.CASCADE)
+    opportunity_id = models.CharField(max_length=255)
+    data = models.JSONField()  
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"PDF Data for Opportunity {self.opportunity_id}"
 
 
