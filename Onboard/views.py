@@ -63,6 +63,7 @@ def submit_location(request):
     if request.method == "POST":
         code = request.POST.get("code")
         location_id = request.POST.get("location_id")
+        logo_file = request.FILES.get("logo")
    
 
         token_url = "https://services.leadconnectorhq.com/oauth/token"
@@ -109,6 +110,7 @@ def submit_location(request):
                 "phone": loc_data.get("phone"),
                 "address": loc_data.get("address"),
                 "website": loc_data.get("website"),
+                "logo": logo_file if logo_file else None,
             },
         )
         print("Token saved to DB. Created new:", created)
@@ -188,10 +190,10 @@ def toggle_custom_fields(request, location_id):
 
     return redirect("list_custom_fields", location_id=location_id)
 
-
-
-
 def CustomValue_pdf_view(request, location_id, opportunity_id):
+    from PIL import Image
+    import base64
+    from io import BytesIO
 
     access_token = get_valid_access_token(location_id)
     if not access_token:
@@ -238,14 +240,61 @@ def CustomValue_pdf_view(request, location_id, opportunity_id):
         defaults={"data": pdf_data}
     )
 
+    # Process logo to base64 with improved sizing and quality
+    logo_base64 = None
+    if integration.logo:
+        try:
+            img = Image.open(integration.logo.path)
+            
+            # Convert to RGB if necessary (handles PNG transparency)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                if img.mode == 'RGBA':
+                    background.paste(img, mask=img.split()[-1])
+                else:
+                    background.paste(img)
+                img = background
+            
+            # Resize to max 160x60 while maintaining aspect ratio
+            # This ensures better visibility in the PDF
+            max_width = 160
+            max_height = 60
+            
+            # Calculate aspect ratio
+            img_ratio = img.width / img.height
+            target_ratio = max_width / max_height
+            
+            if img_ratio > target_ratio:
+                # Image is wider than target
+                new_width = max_width
+                new_height = int(max_width / img_ratio)
+            else:
+                # Image is taller than target
+                new_height = max_height
+                new_width = int(max_height * img_ratio)
+            
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            
+            # Convert to base64 with higher quality
+            buffer = BytesIO()
+            img.save(buffer, format='PNG', optimize=True)
+            img_str = base64.b64encode(buffer.getvalue()).decode()
+            logo_base64 = f"data:image/png;base64,{img_str}"
+            
+        except Exception as e:
+            print(f"Error processing logo: {e}")
+            logo_base64 = None
 
-     # Render HTML template
+    # Render HTML template
     html_string = render_to_string(
         "pdf_customValue.html",
         {
             "integration": integration,
-            "pdf_data": pdf_data[1:],  # skip header row
+            "pdf_data": pdf_data[1:],
             "generated_at": timezone.now(),
+            "logo_base64": logo_base64,
         }
     )
 
@@ -255,13 +304,12 @@ def CustomValue_pdf_view(request, location_id, opportunity_id):
     pdf_filename = f"{uuid.uuid4()}.pdf"
     full_path = os.path.join(pdf_dir, pdf_filename)
 
-    # Generate PDF using xhtml2pdf
+    # Generate PDF
     with open(full_path, "wb") as pdf_file:
         pisa_status = pisa.CreatePDF(src=html_string, dest=pdf_file)
         if pisa_status.err:
             return JsonResponse({"error": "Failed to generate PDF"}, status=500)
 
-    # Build URL
     pdf_url = request.build_absolute_uri(f"{settings.MEDIA_URL}pdfs/{pdf_filename}")
 
     return JsonResponse({

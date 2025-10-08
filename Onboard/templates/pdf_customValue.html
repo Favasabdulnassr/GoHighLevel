@@ -4,43 +4,66 @@
     <meta charset="utf-8">
     <title>{{ integration.name }} - Active Custom Fields</title>
     <style>
+        @page {
+            margin: 20mm;
+        }
+        
         body {
-            font-family: Arial, sans-serif;
-            font-size: 12px;
+            font-family: 'Helvetica', Arial, sans-serif;
+            font-size: 11px;
             color: #333;
-            margin: 20px;
+            margin: 0;
+            padding: 0;
+            line-height: 1.4;
         }
 
-        /* Header table */
-        .header-table {
+        /* Header section */
+        .header {
+            display: table;
             width: 100%;
-            margin-bottom: 20px;
-            border: none;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #4a90e2;
         }
 
-        .header-table td {
+        .header-left {
+            display: table-cell;
+            width: 50%;
             vertical-align: middle;
-            border: none;
-        }
-
-        .header-table img {
-            max-height: 50px;
-            max-width: 120px;
-            display: block;
-        }
-
-        .header-title {
             text-align: center;
-            font-size: 20px;
+            padding-right: 20px;
+        }
+
+        .company-name {
+            font-size: 24px;
             font-weight: bold;
+            color: #2c3e50;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .header-right {
+            display: table-cell;
+            width: 180px;
+            vertical-align: middle;
+            text-align: right;
+        }
+
+        .header-right img {
+            max-height: 60px;
+            max-width: 160px;
+            object-fit: contain;
+            display: block;
+            margin-left: auto;
         }
 
         .section-title {
             font-size: 16px;
             font-weight: bold;
-            margin-top: 20px;
-            margin-bottom: 10px;
-            color: #333;
+            margin-bottom: 12px;
+            color: #2c3e50;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         /* Table styling */
@@ -48,73 +71,119 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
-        }
-
-        .data-table th, .data-table td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-            word-wrap: break-word;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
         .data-table th {
             background-color: #4a90e2;
             color: white;
             font-weight: bold;
+            padding: 12px 10px;
+            text-align: left;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
         }
 
-        .data-table tr:nth-child(even) td {
-            background-color: #f9f9f9;
+        .data-table td {
+            border: 1px solid #e0e0e0;
+            padding: 10px;
+            text-align: left;
+            word-wrap: break-word;
+            vertical-align: top;
+        }
+
+        .data-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .data-table tr:hover {
+            background-color: #e8f4f8;
+        }
+
+        .field-name {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .field-value {
+            color: #212529;
+        }
+
+        .empty-value {
+            color: #adb5bd;
+            font-style: italic;
+        }
+
+        .no-data {
+            text-align: center;
+            color: #6c757d;
+            font-style: italic;
+            padding: 20px !important;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
+            text-align: right;
         }
 
         .generated-at {
-            margin-top: 20px;
-            font-size: 10px;
-            color: #666;
-            text-align: right;
+            font-size: 9px;
+            color: #6c757d;
         }
     </style>
 </head>
 <body>
-    <!-- Header as table -->
-    <table class="header-table">
-        <tr>
-            <td style="width: 25%; text-align:left;">
-                {% if logo_base64 %}
-                <img src="{{ logo_base64 }}" alt="Logo">
-                {% endif %}
-            </td>
-            <td style="width: 75%;" class="header-title">
-                {{ integration.name|default:"Location" }}
-            </td>
-        </tr>
-    </table>
+    <!-- Header Section -->
+    <div class="header">
+        <div class="header-left">
+            <h1 class="company-name">{{ integration.name|default:"Business Name" }}</h1>
+        </div>
+        <div class="header-right">
+            {% if logo_base64 %}
+            <img src="{{ logo_base64 }}" alt="{{ integration.name }} Logo">
+            {% endif %}
+        </div>
+    </div>
 
-    <!-- Active Custom Fields Table -->
+    <!-- Active Custom Fields Section -->
     <div class="section-title">Active Custom Fields</div>
+    
     <table class="data-table">
         <thead>
             <tr>
-                <th style="width:40%;">Field Name</th>
-                <th style="width:60%;">Value</th>
+                <th style="width: 40%;">Field Name</th>
+                <th style="width: 60%;">Value</th>
             </tr>
         </thead>
         <tbody>
             {% for row in pdf_data %}
             <tr>
-                <td>{{ row.0 }}</td>
-                <td>{{ row.1|default:"-" }}</td>
+                <td class="field-name">{{ row.0 }}</td>
+                <td class="field-value">
+                    {% if row.1 %}
+                        {{ row.1 }}
+                    {% else %}
+                        <span class="empty-value">-</span>
+                    {% endif %}
+                </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="2" style="text-align:center; color:#999;">No active fields found</td>
+                <td colspan="2" class="no-data">No active fields found</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <div class="generated-at">
-        Generated at: {{ generated_at|date:"d M Y H:i" }}
+    <!-- Footer -->
+    <div class="footer">
+        <div class="generated-at">
+            Generated on {{ generated_at|date:"d M Y" }} at {{ generated_at|date:"H:i" }}
+        </div>
     </div>
 </body>
 </html>
