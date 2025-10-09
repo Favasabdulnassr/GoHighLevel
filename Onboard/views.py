@@ -196,6 +196,21 @@ def toggle_custom_fields(request, location_id):
         messages.success(request, f"{'Checked' if is_checked else 'Unchecked'} {len(field_ids)} custom field(s).")
 
     return redirect("list_custom_fields", location_id=location_id)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def CustomField_PdF_Upload(request, location_id, opportunity_id):
     
     access_token = get_valid_access_token(location_id)
@@ -222,7 +237,6 @@ def CustomField_PdF_Upload(request, location_id, opportunity_id):
     opp_custom_fields = opp_data.get("customFields", [])
     contact_id = opp_data.get("contactId")
 
-    # Fetch contact custom fields
     contact_custom_fields = []
     if contact_id:
         contact_url = f"https://services.leadconnectorhq.com/contacts/{contact_id}?locationId={location_id}"
@@ -235,14 +249,39 @@ def CustomField_PdF_Upload(request, location_id, opportunity_id):
             contact_data = contact_json.get("contact", {})
             contact_custom_fields = contact_data.get("customFields", [])
 
+    def get_field_value(field_data, field_id, model_type):
+        """Extract clean value from custom field, handling file uploads specially"""
+        if model_type == "opportunity":
+            field_value = next((f.get("fieldValue", "") for f in field_data if f.get("id") == field_id), "")
+        else:  
+            field_value = next((f.get("value", "") for f in field_data if f.get("id") == field_id), "")
+        
+        if isinstance(field_value, dict):
+            for key, value in field_value.items():
+                if isinstance(value, dict) and "documentId" in value:
+                    file_url = value.get("url", "")
+                    original_name = value.get("meta", {}).get("originalname", "")
+                    
+                    if file_url and original_name:
+                        return f"File: {original_name}"
+                    elif file_url:
+                        return f"View File"
+                    else:
+                        return "File Uploaded"
+            
+            return str(field_value)
+        
+        return field_value if field_value else ""
+
     checked_fields = CustomField.objects.filter(location=integration, is_checked=True)
     pdf_data = [["Name", "Value"]]
+    
     for field in checked_fields:
-        value = ""
-        if field.model == "opportunity":
-            value = next((f.get("fieldValue", "") for f in opp_custom_fields if f.get("id") == field.field_id), "")
-        elif field.model == "contact":
-            value = next((f.get("value", "") for f in contact_custom_fields if f.get("id") == field.field_id), "")
+        value = get_field_value(
+            opp_custom_fields if field.model == "opportunity" else contact_custom_fields,
+            field.field_id,
+            field.model
+        )
         pdf_data.append([field.name, value])
 
     logo_base64 = None
@@ -288,7 +327,7 @@ def CustomField_PdF_Upload(request, location_id, opportunity_id):
 
     pdf_dir = os.path.join(settings.MEDIA_ROOT, "pdfs")
     os.makedirs(pdf_dir, exist_ok=True)
-    pdf_filename = f"custom_fields_{opportunity_id}.pdf"  # More descriptive filename
+    pdf_filename = f"custom_fields_{opportunity_id}.pdf"
     full_path = os.path.join(pdf_dir, pdf_filename)
 
     with open(full_path, "wb") as pdf_file:
@@ -328,29 +367,22 @@ def CustomField_PdF_Upload(request, location_id, opportunity_id):
     if contact_id:
         update_contact_url = f"https://services.leadconnectorhq.com/contacts/{contact_id}"
         
-        # First, get ALL custom fields for the location to find FILE_UPLOAD fields
         location_fields_url = f"https://services.leadconnectorhq.com/locations/{location_id}/custom-fields"
         fields_resp = requests.get(location_fields_url, headers=headers)
         
         pdf_field_id = None
         pdf_field_key = None
-        fields_data = {}  # Initialize fields_data
+        fields_data = {}
         
         if fields_resp.status_code == 200:
             fields_data = fields_resp.json()
-            print(f"Found {len(fields_data.get('customFields', []))} custom fields for location")
             
-            # Look for existing FILE_UPLOAD field
             for field in fields_data.get("customFields", []):
-                print(f"Field: {field.get('name')} - Type: {field.get('dataType')} - ID: {field.get('id')}")
                 
-                # First, try to find a field specifically for PDFs
                 if field.get("dataType") == "FILE_UPLOAD" and "pdf" in field.get("name", "").lower():
                     pdf_field_id = field.get("id")
                     pdf_field_key = field.get("key")
-                    print(f"Found PDF file upload field: {field.get('name')} with ID: {pdf_field_id}")
                     break
-                # If no PDF-specific field, use any FILE_UPLOAD field
                 elif field.get("dataType") == "FILE_UPLOAD" and not pdf_field_id:
                     pdf_field_id = field.get("id")
                     pdf_field_key = field.get("key")
@@ -359,20 +391,17 @@ def CustomField_PdF_Upload(request, location_id, opportunity_id):
             print(f"Failed to fetch location custom fields. Status: {fields_resp.status_code}")
             print(f"Response: {fields_resp.text}")
         
-        # Also check if the contact already has a file field with a value
         if not pdf_field_id and contact_custom_fields:
             for field in contact_custom_fields:
                 field_id = field.get("id")
                 field_value = field.get("value")
-                # Check if this field contains file data (has documentId structure)
+
                 if isinstance(field_value, dict) and any(
                     isinstance(v, dict) and "documentId" in v 
                     for v in field_value.values()
                 ):
                     pdf_field_id = field_id
-                    print(f"Found existing file field in contact: {pdf_field_id}")
                     
-                    # Get the key for this field from location fields if we have them
                     for loc_field in fields_data.get("customFields", []):
                         if loc_field.get("id") == field_id:
                             pdf_field_key = loc_field.get("key")
@@ -380,21 +409,17 @@ def CustomField_PdF_Upload(request, location_id, opportunity_id):
                     break
         
         if not pdf_field_id:
-            print("ERROR: No FILE_UPLOAD custom field found!")
-            print("Please create a FILE_UPLOAD custom field in your CRM first")
             return JsonResponse({
                 "error": "No FILE_UPLOAD custom field found. Please create one in your CRM settings.",
                 "message": "PDF was uploaded but not attached to contact"
             }, status=400)
 
-        # Generate a unique UUID for the file
         file_uuid = str(uuid.uuid4())
         
-        # Properly structure the field_value object
         field_value = {
             file_uuid: {
                 "meta": {
-                    "fieldname": pdf_field_key or pdf_field_id,  # Use key if available, otherwise ID
+                    "fieldname": pdf_field_key or pdf_field_id,
                     "originalname": pdf_filename,
                     "encoding": "7bit",
                     "mimetype": "application/pdf",
@@ -406,13 +431,11 @@ def CustomField_PdF_Upload(request, location_id, opportunity_id):
             }
         }
         
-        # Build the payload
         custom_field_entry = {
             "id": pdf_field_id,
             "field_value": field_value
         }
         
-        # Only add key if we have it
         if pdf_field_key:
             custom_field_entry["key"] = pdf_field_key
         
@@ -420,19 +443,15 @@ def CustomField_PdF_Upload(request, location_id, opportunity_id):
             "customFields": [custom_field_entry]
         }
         
-        # Debug logging
-        print(f"Updating contact {contact_id} with field ID: {pdf_field_id}")
-        print(f"Payload: {json.dumps(contact_payload, indent=2)}")
+     
         
-        # Make the API call
         contact_resp = requests.put(
             update_contact_url, 
             headers={**headers, "Content-Type": "application/json"}, 
             json=contact_payload
         )
         
-        # Debug response
-        print(f"Contact update response status: {contact_resp.status_code}")
+  
         
         try:
             contact_json = contact_resp.json()
@@ -465,7 +484,6 @@ def CustomField_PdF_Upload(request, location_id, opportunity_id):
                 "status_code": contact_resp.status_code
             }, status=contact_resp.status_code)
 
-    # Clean up the local PDF file after successful upload
     try:
         os.remove(full_path)
     except Exception as e:
