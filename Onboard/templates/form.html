@@ -54,7 +54,7 @@
   <div class="container">
     <h2>Submit Location ID</h2>
     <!-- IMPORTANT: Added enctype="multipart/form-data" for file upload -->
-    <form method="POST" action="{% url 'submit_location' %}" enctype="multipart/form-data">
+    <form method="POST" action="{% url 'Onboard:submit_location' %}" enctype="multipart/form-data">
       {% csrf_token %}
       
       <label>Authorization Code</label>

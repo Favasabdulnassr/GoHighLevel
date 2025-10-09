@@ -124,7 +124,7 @@
   <!-- Header Section -->
   <div class="header">
     <h2>HighLevel Onboarding</h2>
-    <form action="{% url 'authorize' %}" method="get">
+    <form action="{% url 'Onboard:authorize' %}" method="get">
       <button type="submit">+ Onboard Another Location</button>
     </form>
   </div>
@@ -165,7 +165,7 @@
                 {% endif %}
               </td>
               <td>
-                <a href="{% url 'list_custom_fields' loc.location_id %}" class="btn-manage">
+                <a href="{% url 'Onboard:list_custom_fields' loc.location_id %}" class="btn-manage">
                   Manage Custom Fields
                 </a>
               </td>

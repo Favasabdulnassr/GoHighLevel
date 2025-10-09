@@ -59,51 +59,124 @@
             padding: 15px;
             border: 1px solid #ddd;
         }
+        
+        /* Logo section styling */
+        .logo-section {
+            background-color: white;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        
+        .logo-section h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        
+        .logo-display {
+            margin-bottom: 20px;
+        }
+        
+        .logo-display p {
+            margin-bottom: 10px;
+        }
+        
+        .logo-display img {
+            max-width: 200px;
+            border: 1px solid #ddd;
+            padding: 5px;
+            display: block;
+            margin-bottom: 15px;
+        }
+        
+        .logo-upload-form {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo-upload-form input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        
+        .logo-upload-form button {
+            margin-top: 0;
+        }
+        
+        .custom-fields-section {
+            margin-top: 30px;
+        }
     </style>
 </head>
 <body>
     {% if custom_fields %}
-        <h2>Custom Fields for Location: {{ custom_fields.first.location.name }}</h2>
+    <h2>Custom Fields for Location: {{ custom_fields.first.location.name }}</h2>
 
-        <!-- Existing form for check/uncheck -->
-        <form method="POST" action="{% url 'toggle_custom_fields' custom_fields.first.location.location_id  %}">
-            {% csrf_token %}
-    <table>
-    <tr>
-        <th>Name</th>
-        <th>Field Key</th>
-        <th>Data Type</th>
-        <th>Model</th>
-        <th>Field ID</th>
-        <th>Active</th>
-
-    </tr>
-    {% for field in custom_fields %}
-    <tr>
+    <!-- Logo section -->
+    <div class="logo-section">
+        <h3>Logo</h3>
         
-        <td>{{ field.name }}</td>
-        <td>{{ field.field_key }}</td>
-        <td>{{ field.data_type }}</td>
-        <td>{{ field.model }}</td>
-        <td>{{ field.field_id }}</td>
-        <td>
-            <input type="checkbox" class="toggle-checkbox" data-field-id="{{ field.id }}" {% if field.is_checked %}checked{% endif %}>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+        <div class="logo-display">
+            {% if custom_fields.first.location.logo %}
+                <p>Current Logo:</p>
+                <img src="{{ custom_fields.first.location.logo.url }}" alt="Logo">
+            {% else %}
+                <p>No logo uploaded yet.</p>
+            {% endif %}
+        </div>
 
-
-
-           
+        <!-- Logo update form -->
+        <form method="POST" action="{% url 'Updates:update_logo' custom_fields.first.location.location_id %}" enctype="multipart/form-data" class="logo-upload-form">
+            {% csrf_token %}
+            <input type="file" name="logo" accept="image/*" required>
+            <button type="submit">Update Logo</button>
         </form>
+    </div>
 
-       
+    <!-- Existing custom fields table -->
+    <div class="custom-fields-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3 style="margin: 0;">Custom Fields</h3>
+            <form method="POST" action="{% url 'Updates:sync_latest_fields' custom_fields.first.location.location_id %}" style="margin: 0;">
+                {% csrf_token %}
+                <button type="submit">sync Latest Fields</button>
+            </form>
+        </div>
+        
+        <form method="POST" action="{% url 'Onboard:toggle_custom_fields' custom_fields.first.location.location_id  %}">
+            {% csrf_token %}
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Field Key</th>
+                    <th>Data Type</th>
+                    <th>Model</th>
+                    <th>Field ID</th>
+                    <th>Active</th>
+                </tr>
+                {% for field in custom_fields %}
+                <tr>
+                    <td>{{ field.name }}</td>
+                    <td>{{ field.field_key }}</td>
+                    <td>{{ field.data_type }}</td>
+                    <td>{{ field.model }}</td>
+                    <td>{{ field.field_id }}</td>
+                    <td>
+                        <input type="checkbox" class="toggle-checkbox" data-field-id="{{ field.id }}" {% if field.is_checked %}checked{% endif %}>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </form>
+    </div>
+{% else %}
+    <h2>No Custom Fields Found</h2>
+    <p>There are no custom fields stored for this location.</p>
+{% endif %}
 
-    {% else %}
-        <h2>No Custom Fields Found</h2>
-        <p>There are no custom fields stored for this location.</p>
-    {% endif %}
 
 
     <script>

@@ -24,7 +24,6 @@ import os
 
 
 
-
 CLIENT_ID = settings.CLIENT_ID
 CLIENT_SECRET = settings.CLIENT_SECRET
 REDIRECT_URI = settings.REDIRECT_URI
@@ -122,7 +121,7 @@ def submit_location(request):
         )
         print("Token saved to DB. Created new:", created)
 
-        return redirect("fetch_custom_fields", location_id=location_id)
+        return redirect("Onboard:fetch_custom_fields", location_id=location_id)
 
     return render(request, "form.html")
 
@@ -164,7 +163,7 @@ def fetch_custom_fields(request, location_id):
                 model=field.get("model"),
             )
 
-    return redirect("list_custom_fields", location_id=location_id)
+    return redirect("Onboard:list_custom_fields", location_id=location_id)
 
 
 
@@ -188,14 +187,14 @@ def toggle_custom_fields(request, location_id):
 
         if not field_ids:
             messages.warning(request, "Please select at least one custom field.")
-            return redirect("list_custom_fields", location_id=location_id)
+            return redirect("Onboard:list_custom_fields", location_id=location_id)
 
         is_checked = True if action == "check" else False
 
         CustomField.objects.filter(id__in=field_ids).update(is_checked=is_checked)
         messages.success(request, f"{'Checked' if is_checked else 'Unchecked'} {len(field_ids)} custom field(s).")
 
-    return redirect("list_custom_fields", location_id=location_id)
+    return redirect("Onboard:list_custom_fields", location_id=location_id)
 
 
 

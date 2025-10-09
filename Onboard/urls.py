@@ -1,6 +1,8 @@
 from django.urls import path
 from . import views
 
+app_name = "Onboard"
+
 urlpatterns = [
     path("",views.Login,name="login"),
     path('authorize/', views.authorize, name='authorize'),
